@@ -1166,7 +1166,14 @@
           layout.narrow
             ? `当前后缀 · ${formatRange(s.suffixIndices)}`
             : `当前后缀（本次计算） · ${formatRange(s.suffixIndices)}`,
-          0.8,
+          0.92,
+          {
+            fontSize: 16,
+            fontWeight: 600,
+            labelOffsetY: 16,
+            textAlign: "right",
+            preserveFontSize: true,
+          },
         );
 
         drawBracket(
@@ -1180,9 +1187,24 @@
         );
       }
 
-      function drawBracket(x1, x2, y, color, label, opacity = 0.82) {
+      function drawBracket(
+        x1,
+        x2,
+        y,
+        color,
+        label,
+        opacity = 0.82,
+        style = {},
+      ) {
         const left = Math.min(x1, x2);
         const right = Math.max(x1, x2);
+        const {
+          fontSize = 12,
+          fontWeight = 400,
+          labelOffsetY = 14,
+          textAlign,
+          preserveFontSize = false,
+        } = style;
         ctx.save();
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
@@ -1194,17 +1216,22 @@
         ctx.lineTo(right, y);
         ctx.lineTo(right, y - 3);
         ctx.stroke();
-        ctx.font = `400 12px ${FONT_STACK}`;
+        ctx.font = `${fontWeight} ${fontSize}px ${FONT_STACK}`;
         const compact = right - left < 36;
-        ctx.textAlign = compact ? "right" : "center";
-        const labelX = compact ? right : (left + right) / 2;
-        if (compact) {
-          ctx.fillText(label, labelX, y + 14);
+        ctx.textAlign = textAlign || (compact ? "right" : "center");
+        const labelX =
+          ctx.textAlign === "right"
+            ? right
+            : ctx.textAlign === "left"
+              ? left
+              : (left + right) / 2;
+        if (compact || preserveFontSize) {
+          ctx.fillText(label, labelX, y + labelOffsetY);
         } else {
           ctx.fillText(
             label,
             labelX,
-            y + 14,
+            y + labelOffsetY,
             Math.max(44, right - left),
           );
         }
@@ -1293,6 +1320,7 @@
           mode,
           headerY,
           longContextLabel,
+          showStartLayerLabel = true,
         } = options;
         const {
           margin,
@@ -1455,12 +1483,14 @@
           ctx.restore();
         }
 
-        ctx.save();
-        ctx.fillStyle = palette.mutedForeground;
-        ctx.font = `400 12px ${FONT_STACK}`;
-        ctx.textAlign = "left";
-        ctx.fillText(`L${startLayer}`, startX, top - 5);
-        ctx.restore();
+        if (showStartLayerLabel) {
+          ctx.save();
+          ctx.fillStyle = palette.mutedForeground;
+          ctx.font = `400 12px ${FONT_STACK}`;
+          ctx.textAlign = "left";
+          ctx.fillText(`L${startLayer}`, startX, top - 5);
+          ctx.restore();
+        }
 
         ctx.save();
         ctx.fillStyle = palette.mutedForeground;
@@ -1664,6 +1694,7 @@
           activeIndices: s.decoderIndices,
           mode: state.replay ? "window" : "same-rows",
           headerY: state.layout.decoderHeaderY,
+          showStartLayerLabel: false,
           longContextLabel: state.layout.narrow
             ? [
                 "长历史 consumer 读取最近 source",
