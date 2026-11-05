@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeepSeek V4.1-Flash · Static Kernel / Super Kernel 详解</title>
+<style>
+:root{
+  --bg:#f5f5f0;
+  --paper:#fff;
+  --ink:#18312f;
+  --muted:#697671;
+  --line:#dce2da;
+  --line-strong:#c9d2c7;
+  --teal:#16766a;
+  --teal-soft:#dceee8;
+  --blue:#426a9e;
+  --blue-soft:#e5edf7;
+  --amber:#8a651f;
+  --amber-soft:#f5ecd5;
+  --red:#a1453f;
+  --red-soft:#f5e5e1;
+  --green:#3e7453;
+  --green-soft:#e5efe5;
+  --mono:Consolas,"SFMono-Regular","Cascadia Mono",monospace;
+  --shadow:0 18px 50px rgba(30,55,48,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font:14px/1.72 system-ui,"Microsoft YaHei","PingFang SC",sans-serif;
+}
+button,select,input{font:inherit;color:inherit}
+button,select{cursor:pointer}
+button{border:1px solid var(--line-strong);background:var(--paper);border-radius:6px;padding:8px 12px}
+button:hover{border-color:var(--teal)}
+button.active,button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+button:disabled{opacity:.42;cursor:not-allowed}
+:focus-visible{outline:3px solid #76b3a8;outline-offset:3px}
+h1,h2,h3,p{margin:0}
+h1{font-size:clamp(30px,4vw,46px);line-height:1.2;font-weight:500;letter-spacing:0}
+h2{font-size:24px;line-height:1.38;font-weight:500;letter-spacing:0}
+h3{font-size:16px;line-height:1.5;font-weight:500;letter-spacing:0}
+p{overflow-wrap:anywhere}
+a{color:var(--teal);text-underline-offset:3px}
+small,.muted{color:var(--muted)}
+code,pre,.mono{font-family:var(--mono)}
+code{overflow-wrap:anywhere}
+pre{
+  margin:0;
+  padding:16px;
+  background:#eef2ed;
+  border-radius:6px;
+  overflow:auto;
+  font:12px/1.75 var(--mono);
+  tab-size:2;
+  max-height:560px;
+}
+.shell{max-width:1480px;margin:auto;padding:34px 30px 64px}
+.topline{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.eyebrow{font:11px/1.6 var(--mono);letter-spacing:0;color:var(--teal);text-transform:uppercase}
+.hero{max-width:1080px;padding-top:16px}
+.hero h1{margin:11px 0 15px}
+.hero-copy{max-width:900px;font-size:15px;line-height:1.85;color:var(--muted)}
+.version{
+  flex:0 0 auto;
+  border-left:2px solid var(--line-strong);
+  padding-left:15px;
+  color:var(--muted);
+  font:11px/1.75 var(--mono);
+  max-width:300px;
+}
+.notice{
+  margin:22px 0 0;
+  padding:13px 16px;
+  background:#eaf0e9;
+  border-left:3px solid var(--teal);
+  font-size:13px;
+}
+.notice.amber{background:var(--amber-soft);border-left-color:var(--amber)}
+.notice.red{background:var(--red-soft);border-left-color:var(--red)}
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  border-block:1px solid var(--line);
+  margin:26px 0 8px;
+}
+.stat{padding:16px 18px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line)}
+.stat strong{display:block;font:26px/1.25 var(--mono);font-weight:400}
+.stat span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;margin:22px 0 28px;border-bottom:1px solid var(--line)}
+.tabs button{
+  background:none;
+  border:0;
+  border-bottom:3px solid transparent;
+  border-radius:0;
+  color:var(--muted);
+  padding:10px 13px 9px;
+}
+.tabs button:hover{color:var(--ink)}
+.tabs button.active{background:none;color:var(--teal);border-bottom-color:var(--teal)}
+.page-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:22px}
+.page-head p{max-width:880px;color:var(--muted);margin-top:7px}
+.badge{
+  display:inline-block;
+  flex:0 0 auto;
+  padding:4px 8px;
+  border-radius:4px;
+  background:#e7ece4;
+  color:var(--muted);
+  font:11px/1.5 var(--mono);
+  white-space:nowrap;
+}
+.badge.teal{background:var(--teal-soft);color:var(--teal)}
+.badge.amber{background:var(--amber-soft);color:var(--amber)}
+.badge.red{background:var(--red-soft);color:var(--red)}
+.section{margin-top:34px;padding-top:28px;border-top:1px solid var(--line)}
+.section-lead{max-width:920px;color:var(--muted);margin-top:7px}
+.mini-title{font:11px/1.5 var(--mono);color:var(--teal);margin-bottom:8px}
+.micro{font-size:12px;line-height:1.65;color:var(--muted)}
+.strong{font-weight:500;color:var(--ink)}
+.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.split.wide-left{grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr)}
+.split.narrow-left{grid-template-columns:minmax(260px,.65fr) minmax(0,1.35fr)}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.flowline{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin-top:18px}
+.flowstep{
+  flex:1 1 150px;
+  min-width:0;
+  border-top:2px solid var(--teal);
+  padding:13px 12px 12px;
+  background:#f0f3ee;
+}
+.flowstep b{display:block;font:13px/1.5 var(--mono);font-weight:500}
+.flowstep span{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.flowarrow{align-self:center;color:var(--teal);font:15px/1 var(--mono)}
+.relation{
+  border-top:1px solid var(--line);
+  margin-top:16px;
+}
+.relation-row{
+  display:grid;
+  grid-template-columns:160px minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  padding:15px 0;
+  border-bottom:1px solid var(--line);
+  align-items:start;
+}
+.relation-row strong{font-weight:500}
+.relation-row p{font-size:13px;color:var(--muted)}
+.stack{
+  border-left:2px solid var(--line-strong);
+  margin-top:18px;
+}
+.stack-row{
+  display:grid;
+  grid-template-columns:minmax(160px,.55fr) minmax(0,1.45fr);
+  gap:20px;
+  padding:15px 18px;
+  border-bottom:1px solid var(--line);
+}
+.stack-row b{font-weight:500}
+.stack-row p{font-size:13px;color:var(--muted)}
+.callout{
+  padding:16px 18px;
+  background:var(--blue-soft);
+  border-left:3px solid var(--blue);
+  font-size:13px;
+}
+.callout.teal{background:var(--teal-soft);border-left-color:var(--teal)}
+.callout.amber{background:var(--amber-soft);border-left-color:var(--amber)}
+.callout.red{background:var(--red-soft);border-left-color:var(--red)}
+.callout+ .callout{margin-top:12px}
+.table-wrap{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  overflow-y:hidden;
+  border-top:1px solid var(--line);
+}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:660px}
+th,td{padding:12px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#edf2ec;color:var(--ink);font-weight:500;white-space:nowrap}
+td p{color:var(--muted);font-size:12px;margin-top:3px}
+.demo{
+  margin-top:18px;
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:8px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.demo-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--line);
+}
+.demo-body{padding:20px}
+.demo-controls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:end}
+.control{display:grid;gap:5px;min-width:0}
+.control span{font:11px/1.5 var(--mono);color:var(--muted)}
+select,input[type="number"]{
+  min-height:38px;
+  border:1px solid var(--line-strong);
+  background:#fff;
+  border-radius:5px;
+  padding:7px 9px;
+}
+input[type="range"]{width:min(320px,100%);accent-color:var(--teal)}
+.metric-row{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  border-block:1px solid var(--line);
+  margin:18px 0;
+}
+.metric{padding:13px 14px;min-width:0}
+.metric+.metric{border-left:1px solid var(--line)}
+.metric small{display:block;font:10px/1.5 var(--mono);color:var(--muted)}
+.metric strong{display:block;font:22px/1.35 var(--mono);font-weight:400;margin-top:2px;overflow-wrap:anywhere}
+.shape-pool{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.shape-chip{
+  min-width:42px;
+  text-align:center;
+  border:1px solid var(--line);
+  background:#f1f4ee;
+  border-radius:4px;
+  padding:5px 8px;
+  font:11px/1.5 var(--mono);
+}
+.shape-chip.hit{background:var(--teal-soft);border-color:#9fc7b8;color:var(--teal)}
+.shape-chip.miss{background:var(--red-soft);border-color:#d9ada8;color:var(--red)}
+.result-box{
+  min-height:52px;
+  padding:12px 14px;
+  background:#f0f4ef;
+  border-left:3px solid var(--teal);
+  font-size:13px;
+}
+.result-box.error{background:var(--red-soft);border-left-color:var(--red)}
+.result-box.warn{background:var(--amber-soft);border-left-color:var(--amber)}
+.stage-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);margin-top:18px}
+.stage{background:var(--paper);padding:16px}
+.stage-num{font:11px/1.5 var(--mono);color:var(--teal)}
+.stage h3{margin-top:4px}
+.stage p{font-size:12px;color:var(--muted);margin-top:6px}
+.op-flow{display:flex;gap:7px;flex-wrap:wrap;align-items:stretch;margin-top:8px}
+.op-node{
+  flex:1 1 105px;
+  min-width:90px;
+  min-height:72px;
+  padding:9px;
+  background:#f1f4ef;
+  border:1px solid var(--line);
+  border-radius:5px;
+  text-align:left;
+}
+.op-node b{display:block;font:11px/1.45 var(--mono);font-weight:500;overflow-wrap:anywhere}
+.op-node small{display:block;font-size:10px;color:var(--muted);margin-top:4px}
+.op-node.boundary{background:var(--amber-soft);border-color:#cfb878}
+.op-node.cut{box-shadow:inset 0 -3px 0 var(--amber)}
+.group-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.fusion-group{
+  min-width:110px;
+  flex:1 1 130px;
+  padding:10px 11px;
+  border-top:3px solid var(--teal);
+  background:var(--teal-soft);
+}
+.fusion-group.boundary{background:var(--amber-soft);border-top-color:var(--amber)}
+.fusion-group b{display:block;font:11px/1.5 var(--mono);font-weight:500}
+.fusion-group span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:11px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:12px;height:5px;background:var(--teal);border-radius:1px}
+.legend i.amber{background:var(--amber)}
+.layer-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.layer-map{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-top:18px}
+.layer-cell{
+  position:relative;
+  min-width:0;
+  min-height:65px;
+  padding:8px 6px;
+  border:1px solid var(--line);
+  background:#f1f4ef;
+  border-radius:4px;
+  color:var(--ink);
+  text-align:left;
+}
+.layer-cell:hover{border-color:var(--teal)}
+.layer-cell b{display:block;font:11px/1.4 var(--mono);font-weight:500}
+.layer-cell i{
+  display:block;
+  height:4px;
+  margin-top:10px;
+  background:var(--teal);
+  opacity:.36;
+  border-radius:1px;
+}
+.layer-cell.active{background:var(--teal-soft);border-color:#96c2b1}
+.layer-cell.scanned{background:#edf4ef}
+.layer-cell.current{background:var(--amber-soft);border-color:#cfb878}
+.layer-cell.current i{background:var(--amber);opacity:1}
+.layer-detail{
+  border-top:1px solid var(--line);
+  margin-top:18px;
+  padding-top:18px;
+}
+.module-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border-block:1px solid var(--line);margin-top:12px}
+.module-block{background:var(--paper);padding:13px 11px;min-width:0}
+.module-block b{display:block;font-size:12px;font-weight:500}
+.module-block span{display:block;font-size:10px;color:var(--muted);margin-top:5px}
+.level{
+  display:inline-block;
+  margin-top:6px;
+  padding:2px 6px;
+  border-radius:3px;
+  font:10px/1.4 var(--mono);
+}
+.level.high{background:var(--teal-soft);color:var(--teal)}
+.level.mid{background:var(--blue-soft);color:var(--blue)}
+.level.low{background:var(--amber-soft);color:var(--amber)}
+.coverage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.coverage{border-top:3px solid var(--blue);padding-top:12px}
+.coverage.decode{border-top-color:var(--teal)}
+.coverage p{font-size:12px;color:var(--muted);margin-top:6px}
+.ruled-list{margin:0;padding-left:20px;font-size:13px}
+.ruled-list li+li{margin-top:7px}
+.config-grid{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(0,1.28fr);gap:22px;margin-top:18px}
+.config-controls{display:grid;gap:14px}
+.config-control{display:grid;gap:5px}
+.config-control label{font:11px/1.5 var(--mono);color:var(--muted)}
+.config-output{min-width:0}
+.status-box{
+  min-height:74px;
+  padding:13px 14px;
+  background:#f0f4ef;
+  border-left:3px solid var(--teal);
+  font-size:13px;
+}
+.status-box.error{background:var(--red-soft);border-left-color:var(--red)}
+.status-box.warn{background:var(--amber-soft);border-left-color:var(--amber)}
+.preset-row{display:flex;flex-wrap:wrap;gap:7px}
+.preset-row button{font-size:12px;padding:6px 9px}
+.checklist{margin-top:8px}
+.check{
+  display:grid;
+  grid-template-columns:20px minmax(0,1fr);
+  gap:9px;
+  padding:11px 0;
+  border-bottom:1px solid var(--line);
+  align-items:start;
+  font-size:13px;
+}
+.check input{margin:5px 0 0;accent-color:var(--teal)}
+.check.done span{color:var(--muted);text-decoration:line-through}
+.progress{height:7px;background:#e6ebe4;border-radius:2px;overflow:hidden;margin:10px 0 14px}
+.progress i{display:block;height:100%;background:var(--teal);transition:width .25s ease}
+.source-row{display:grid;grid-template-columns:160px minmax(0,1fr) 100px;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}
+.source-row code{font-size:11px}
+.footer{margin-top:42px;padding-top:20px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:24px;
+  transform:translateX(-50%);
+  background:var(--ink);
+  color:#fff;
+  padding:10px 16px;
+  border-radius:5px;
+  font-size:13px;
+  z-index:20;
+  box-shadow:0 10px 30px rgba(0,0,0,.18);
+}
+details{border-bottom:1px solid var(--line);padding:12px 0}
+summary{cursor:pointer;font-weight:500}
+details p{margin-top:8px;color:var(--muted);font-size:13px}
+[hidden]{display:none!important}
+.nowrap{white-space:nowrap}
+.mono-num{font-variant-numeric:tabular-nums}
+@media(max-width:1100px){
+  .layer-map{grid-template-columns:repeat(8,minmax(0,1fr))}
+  .four{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .module-strip{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  .topline{display:block}
+  .version{margin-top:16px;max-width:none}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stat:nth-child(3){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--line)}
+  .split,.split.wide-left,.split.narrow-left,.config-grid,.coverage-grid{grid-template-columns:1fr}
+  .three{grid-template-columns:1fr}
+  .page-head{display:block}
+  .page-head .badge{margin-top:10px}
+  .relation-row{grid-template-columns:120px minmax(0,1fr)}
+  .relation-row p:last-child{grid-column:2}
+  .stage-strip{grid-template-columns:1fr}
+  .metric-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metric:nth-child(3){border-left:0}
+  .metric:nth-child(n+3){border-top:1px solid var(--line)}
+}
+@media(max-width:680px){
+  .shell{padding:24px 16px 44px}
+  #main,.section,.split>*,.three>*,.four>*,.config-grid>*,.coverage-grid>*,.demo,.demo-body{min-width:0;max-width:100%}
+  h1{font-size:30px}
+  h2{font-size:21px}
+  .tabs{gap:0;overflow:auto;flex-wrap:nowrap;padding-bottom:1px}
+  .tabs button{white-space:nowrap;padding:9px 10px}
+  .demo-head{display:block;padding:15px 15px 12px}
+  .demo-head .badge{margin-top:8px}
+  .demo-body{padding:15px}
+  .demo-controls{align-items:stretch}
+  .control{width:100%}
+  .control select,.control input{width:100%;min-height:44px}
+  input[type="range"]{width:100%;min-height:44px}
+  .metric-row{grid-template-columns:1fr 1fr}
+  .layer-map{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .layer-cell{min-height:61px}
+  .module-strip{grid-template-columns:1fr}
+  .relation-row{grid-template-columns:1fr;gap:5px}
+  .relation-row p:last-child{grid-column:auto}
+  .stack-row{grid-template-columns:1fr;gap:5px}
+  .source-row{grid-template-columns:1fr 70px}
+  .source-row code{grid-column:1 / -1}
+  .op-node{flex:1 1 calc(50% - 7px)}
+  button{min-height:40px}
+  .tabs button{min-height:44px}
+  .preset-row button{flex:1 1 calc(50% - 7px)}
+}
+@media(max-width:420px){
+  .stats{grid-template-columns:1fr}
+  .stat+.stat{border-left:0;border-top:1px solid var(--line)}
+  .metric-row{grid-template-columns:1fr}
+  .metric+.metric{border-left:0;border-top:1px solid var(--line)}
+  .layer-map{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .op-node{flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+}
+@media print{
+  body{background:#fff}
+  .shell{padding:0;max-width:none}
+  .tabs,.demo-controls,.preset-row,.layer-toolbar,.toast{display:none!important}
+  .demo{box-shadow:none}
+  pre{max-height:none;white-space:pre-wrap}
+  .section,.demo{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="topline">
+      <div class="hero">
+        <div class="eyebrow">Ascend A3 · DeepSeek V4.1-Flash · Compile-time optimization</div>
+        <h1>Static Kernel 与 Super Kernel</h1>
+        <p class="hero-copy">从固定 shape 的专用算子二进制，到把合格的子 kernel 重新组织成更大的执行单元。这份说明面向第一次接触 vLLM Ascend 图编译的读者，同时把 DeepSeek V4.1-Flash 的 40 层重复结构、P/D 分离、PCP、MegaMoE 与 DSpark 放回同一张收益地图。</p>
+      </div>
+      <div class="version">
+        本地源码核对<br>
+        vllm-ascend @ d3caf587<br>
+        2026-11-05<br>
+        单文件 · 无 CDN · 可离线阅读
+      </div>
+    </div>
+
+    <div class="notice amber"><strong>先划定边界。</strong> 本文解释的是机制、适用条件与收益来源，不报告未经 A3 实机 Profiling 验证的性能百分比。Static Kernel 和 Super Kernel 都不会减少模型数学 FLOPs；它们主要缩短“算子怎么被发起、依赖怎么同步、任务怎么排队”的开销。</div>
+
+    <div class="stats" aria-label="关键数字">
+      <div class="stat"><strong>2</strong><span>Static / Super 两级可选优化</span></div>
+      <div class="stat"><strong>40</strong><span>V4.1-Flash 主干重复层（CED 结构）</span></div>
+      <div class="stat"><strong>0</strong><span>直接减少的模型 FLOPs</span></div>
+      <div class="stat"><strong>默认关闭</strong><span>Static Kernel 的仓库默认值</span></div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="说明章节">
+    <button type="button" class="active" data-tab="overview" role="tab" aria-selected="true">01 四层关系</button>
+    <button type="button" data-tab="static" role="tab" aria-selected="false">02 Static Kernel</button>
+    <button type="button" data-tab="super" role="tab" aria-selected="false">03 Super Kernel</button>
+    <button type="button" data-tab="benefit" role="tab" aria-selected="false">04 V4.1 收益地图</button>
+    <button type="button" data-tab="config" role="tab" aria-selected="false">05 配置与验证</button>
+  </nav>
+
+  <main id="main"></main>
+
+  <footer class="footer">
+    依据本地 vllm-ascend <code>d3caf5873c9830e192fcc1638f442410b2aa9d57</code> 的图编译文档与源码整理。页面中的 shape、融合分组和 40 层播放器用于解释机制，并不是运行时 Profiling 快照。能力支持、配置成功、实际正收益是三个不同结论。
+  </footer>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const roundUp = (value, unit) => Math.ceil(value / unit) * unit;
+
+const state = {
+  tab: "overview",
+  static: { mtp: 5, capture: 56, actual: 44 },
+  super: { preset: 0, barriers: new Set([4, 5, 9]) },
+  layers: { index: 4, playing: false, timer: null },
+  config: { graph: "FULL_DECODE_ONLY", npugraph: true, staticKernel: false, superKernel: "inherit" },
+  checks: new Set()
+};
+
+const baseCaptureSizes = [24, 32, 40, 48, 56, 60];
+const maxCaptureSize = 64;
+
+function showToast(text) {
+  const toast = $("#toast");
+  toast.textContent = text;
+  toast.hidden = false;
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => { toast.hidden = true; }, 2800);
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  return copied ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+}
+
+function stopLayerPlayback() {
+  if (state.layers.timer) {
+    clearInterval(state.layers.timer);
+    state.layers.timer = null;
+  }
+  state.layers.playing = false;
+}
+
+function pageHead(title, copy, badge, badgeClass = "") {
+  return `<div class="page-head"><div><h2>${title}</h2><p>${copy}</p></div><span class="badge ${badgeClass}">${badge}</span></div>`;
+}
+
+function overviewPage() {
+  return `
+    ${pageHead(
+      "先分清：运行容器、编译后端、算子二进制、二进制融合",
+      "ACLGraph 负责把一段执行捕获成可重放的图；npugraph_ex 是编译与图优化入口；Static Kernel 把固定 shape 的单算子预编译成专用二进制；Super Kernel 再尝试把合格的子 kernel 组合成更大的执行单元。",
+      "关系比“功能开关”更重要",
+      "teal"
+    )}
+
+    <div class="flowline" aria-label="依赖链">
+      <div class="flowstep"><b>FULL / FULL_DECODE_ONLY</b><span>必要的整图执行场景。NONE、PIECEWISE 与 FULL_AND_PIECEWISE 会让后面的优化失效。</span></div>
+      <div class="flowarrow">→</div>
+      <div class="flowstep"><b>ACLGraph capture / replay</b><span>运行时外层：把图捕获下来，重放时减少 Python 与主机侧重复调度。</span></div>
+      <div class="flowarrow">→</div>
+      <div class="flowstep"><b>npugraph_ex</b><span>编译与图扩展入口；Static 和 Super 都依赖它。</span></div>
+      <div class="flowarrow">→</div>
+      <div class="flowstep"><b>Static Kernel</b><span>按捕获范围里的固定 shape，为合格算子生成专用二进制。</span></div>
+      <div class="flowarrow">→</div>
+      <div class="flowstep"><b>Super Kernel</b><span>在静态二进制之上，把连续合格子图组织成更大的 kernel。</span></div>
+    </div>
+
+    <div class="callout teal" style="margin-top:16px"><strong>新人先记这一句：</strong>Static 解决“这个 shape 的算子已经提前编译好”；Super 解决“相邻的多个合格 kernel 能否少发起、少排队、少同步”。ACLGraph 解决的是更外层的“整段图能否直接重放”。</div>
+
+    <div class="section">
+      <h3>四类机制各自负责什么</h3>
+      <div class="relation">
+        <div class="relation-row">
+          <strong>ACLGraph</strong>
+          <p><span class="strong">解决的问题：</span>Python、框架调度和主机侧重复提交。捕获后在固定地址与 shape 上重放。</p>
+          <p><span class="strong">不解决的问题：</span>不会自动把两个设备的 kernel 合并，也不会绕过捕获 shape 与地址稳定性约束。</p>
+        </div>
+        <div class="relation-row">
+          <strong>Npugraph_ex</strong>
+          <p><span class="strong">解决的问题：</span>给 ACLGraph 路径提供图编译、静态 shape kernel 和后续二进制优化的扩展点。</p>
+          <p><span class="strong">不解决的问题：</span>它不是单独的模型算子，也不会凭空提升所有模型的覆盖范围。</p>
+        </div>
+        <div class="relation-row">
+          <strong>Static Kernel</strong>
+          <p><span class="strong">解决的问题：</span>计算前知道 shape，就提前生成单算子专用二进制，减少运行期形状处理与通用路径开销。</p>
+          <p><span class="strong">不解决的问题：</span>遇到未编译 shape、黑名单算子或非整图路径时，覆盖会缩小或回退。</p>
+        </div>
+        <div class="relation-row">
+          <strong>Super Kernel</strong>
+          <p><span class="strong">解决的问题：</span>把满足依赖与支持条件的多个子 kernel 组合，减少 launch、task scheduling、operator-head 与同步开销。</p>
+          <p><span class="strong">不解决的问题：</span>不是 PyTorch 源码级融合，不会把 40 层变成单个 kernel，也不替代 MegaMoE。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section split">
+      <div>
+        <h3>从一次 Decode 看执行栈</h3>
+        <p class="section-lead">把“发起”和“计算”拆开，才能理解收益为什么通常在 Decode、长稳态和低时延时更明显。</p>
+        <div class="stack">
+          <div class="stack-row"><b>Host / Python</b><p>准备 batch、采样、KV metadata，决定本次走向量化的 runner 与 graph bucket。</p></div>
+          <div class="stack-row"><b>ACLGraph replay</b><p>跳过大部分重复的主机侧 graph launch，把一段固定执行交给设备图。</p></div>
+          <div class="stack-row"><b>Device task graph</b><p>图内部仍有一串 kernel/task。算子越多、依赖越碎，launch 与调度空隙越值得关注。</p></div>
+          <div class="stack-row"><b>Layer body</b><p>V4.1 每层重复 mHC、Norm、Attention、Router、MoE 等结构。Static 改善单算子入口，Super 尝试压缩相邻任务。</p></div>
+          <div class="stack-row"><b>Compute / collective</b><p>矩阵乘、稀疏 attention、专家计算和通信本身仍要做。这里是 FLOPs 和带宽的主战场，不由 Super Kernel 消除。</p></div>
+        </div>
+      </div>
+      <div>
+        <h3>三个最容易混淆的对照</h3>
+        <div class="callout amber"><strong>Static ≠ ACLGraph。</strong> ACLGraph 是捕获/重放容器；Static 是在这条路径里，为固定 shape 生成算子专用二进制。</div>
+        <div class="callout"><strong>Super ≠ 源码级融合。</strong> 它工作在已编译的 kernel 二进制层，只合并编译器和硬件都支持、依赖关系也允许的部分。</div>
+        <div class="callout teal"><strong>Super ≠ MegaMoE。</strong> MegaMoE 是 MoE 通信与专家计算的融合路径；Super 优化的是图中可组合的 kernel 任务。两者可以同时存在，但不是同一个开关。</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>常见误解，直接翻转</h3>
+      <details><summary>“打开 Super，整个 V4.1 会变成一个 kernel。”</summary><p>不会。每层仍有不同算子、collective、动态 metadata 与依赖。Super 只能合并满足条件的连续片段，不支持或必须切开的算子会成为边界。</p></details>
+      <details><summary>“P、D 两端都会自动吃到收益。”</summary><p>不一定。若 P 使用 <code>--enforce-eager</code>，就没有 ACLGraph 捕获路径，Static/Super 的主路径基本不生效。D 的 <code>FULL_DECODE_ONLY</code> 通常是更直接的观察点。</p></details>
+      <details><summary>“启动成功，就说明优化真的覆盖到了模型。”</summary><p>不能这样验收。日志只说明编译或优化步骤被调用；还要用 Ascend Profiling 检查 <code>static_kernel</code> 条目、kernel 分组、Block Dim，并在关闭组与开启组之间做同条件性能对照。</p></details>
+    </div>
+  `;
+}
+
+function computeStatic() {
+  const mtp = Number(state.static.mtp);
+  const queryLength = mtp + 1;
+  const actual = Number(state.static.actual);
+  const configured = Number(state.static.capture);
+  const compiled = new Set();
+  for (const size of baseCaptureSizes) {
+    if (size <= maxCaptureSize) compiled.add(size);
+    const rounded = roundUp(size, queryLength);
+    if (rounded <= maxCaptureSize) compiled.add(rounded);
+  }
+  const pool = [...compiled].filter(size => size >= queryLength).sort((a, b) => a - b);
+  const aligned = roundUp(actual, queryLength);
+  const bucket = pool.find(size => size >= aligned);
+  const configuredBucket = roundUp(configured, queryLength) <= maxCaptureSize ? roundUp(configured, queryLength) : configured;
+  return { mtp, queryLength, actual, configured, configuredBucket, aligned, bucket, pool };
+}
+
+function updateStaticDemo() {
+  const data = computeStatic();
+  const result = $("#staticResult");
+  if (!result) return;
+  $("#staticQuery").textContent = String(data.queryLength);
+  $("#staticAligned").textContent = String(data.aligned);
+  $("#staticBucket").textContent = data.bucket == null ? "未捕获" : String(data.bucket);
+  $("#staticConfigured").textContent = String(data.configuredBucket);
+  $("#staticPool").innerHTML = data.pool.map(size => `<span class="shape-chip ${size === data.bucket ? "hit" : ""}">${size}</span>`).join("");
+  $("#staticShapeKey").textContent = `[tokens=${data.bucket ?? "none"}, hidden=模型决定, topK=模型决定, dtype=部署决定]`;
+  result.className = "result-box";
+  if (data.bucket == null) {
+    result.classList.add("error");
+    result.innerHTML = `<strong>未命中：</strong>本批 ${data.actual} token 对齐到 ${data.aligned} 后超过当前捕获上限 ${maxCaptureSize}。本次不落在已列出的静态 shape bucket 中，不能据此宣称吃到 Static Kernel。`;
+  } else {
+    result.innerHTML = `<strong>命中 ${data.bucket} token bucket。</strong> 配置的 ${data.configured} 在这个 MTP 档位下归一化到 ${data.configuredBucket}；本批 ${data.actual} 个实际 token 对齐到 ${data.aligned}，运行时图 bucket 选为 ${data.bucket}。`;
+  }
+}
+
+function staticPage() {
+  return `
+    ${pageHead(
+      "Static Kernel：把固定 shape 的单算子提前编译",
+      "它适合 shape 变化少、可接受较长首次编译、且执行路径能进入整图捕获的场景。对 V4.1-Flash 的 Decode 来说，MTP、batch token 上限与 capture sizes 会共同决定编译哪些 shape。",
+      "可选 · 默认关闭",
+      "amber"
+    )}
+
+    <div class="stage-strip" aria-label="Static Kernel 生命周期">
+      <div class="stage"><div class="stage-num">STAGE 01</div><h3>启动时确定 shape 范围</h3><p>从 Decode ACLGraph 的捕获 size 得到编译范围；MRV2 会按 Decode query 长度把 token 数向上取整。</p></div>
+      <div class="stage"><div class="stage-num">STAGE 02</div><h3>生成专用算子二进制</h3><p>合格算子按固定 shape 编译。首次可能增加数分钟到数十分钟启动时间；完成后可复用缓存。</p></div>
+      <div class="stage"><div class="stage-num">STAGE 03</div><h3>运行时命中并重放</h3><p>请求被对齐到捕获 bucket，Stable address 与固定 shape 满足后，走已生成的静态二进制。</p></div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-head">
+        <div><h3>交互：看 MTP 与 capture size 如何变成运行时 bucket</h3><p class="micro">教学用捕获集合为 ${baseCaptureSizes.join(", ")}，上限 ${maxCaptureSize}。真实集合由模型配置、调度上限与 runner 计算，不以下面这组数字为准。</p></div>
+        <span class="badge teal">shape matcher</span>
+      </div>
+      <div class="demo-body">
+        <div class="demo-controls">
+          <label class="control"><span>MTP 配置</span><select id="staticMtp"><option value="0">MTP0 · query length 1</option><option value="5" selected>MTP5 · query length 6</option></select></label>
+          <label class="control"><span>配置 capture size</span><select id="staticCapture"><option value="48">48</option><option value="56" selected>56</option><option value="60">60</option></select></label>
+          <label class="control"><span>本批实际 token</span><input id="staticActual" type="range" min="24" max="64" step="1" value="44"><span id="staticActualValue" class="mono">44</span></label>
+        </div>
+        <div class="metric-row" aria-live="polite">
+          <div class="metric"><small>DECODE QUERY LENGTH</small><strong id="staticQuery">6</strong></div>
+          <div class="metric"><small>CONFIG → NORMALIZED</small><strong id="staticConfigured">60</strong></div>
+          <div class="metric"><small>ACTUAL → ALIGNED</small><strong id="staticAligned">48</strong></div>
+          <div class="metric"><small>GRAPH BUCKET</small><strong id="staticBucket">48</strong></div>
+        </div>
+        <div class="mini-title">本档位可用的 shape buckets</div>
+        <div id="staticPool" class="shape-pool"></div>
+        <div style="margin-top:16px" id="staticResult" class="result-box" role="status"></div>
+        <div class="callout" style="margin-top:14px"><strong>Static shape key（示意）：</strong> <code id="staticShapeKey"></code><br><span class="micro">真正的 key 还会受 dtype、布局、TP/DP 拓扑与算子实现影响。shape 改变可能产生新二进制、命中缓存，或落到未覆盖路径。</span></div>
+      </div>
+    </div>
+
+    <div class="section split">
+      <div>
+        <h3>它实际减少了什么</h3>
+        <div class="table-wrap" style="margin-top:12px">
+          <table>
+            <thead><tr><th>环节</th><th>可能的变化</th><th>是否减少模型计算</th></tr></thead>
+            <tbody>
+              <tr><td>形状推导与通用分支</td><td>固定 shape 让部分路径在编译期确定</td><td>否</td></tr>
+              <tr><td>算子入口与 task 准备</td><td>专用二进制减少运行期通用处理</td><td>否</td></tr>
+              <tr><td>首次启动</td><td>增加静态编译与缓存构建时间</td><td>否，且是额外成本</td></tr>
+              <tr><td>稳态 Decode</td><td>固定 bucket 重复执行，收益更容易显现</td><td>矩阵乘、attention 等 FLOPs 不变</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3>覆盖不是“全模型打开”</h3>
+        <div class="callout amber"><strong>整图模式是前提。</strong> 平台代码在 <code>NONE</code>、<code>PIECEWISE</code> 与 <code>FULL_AND_PIECEWISE</code> 路径强制关闭 npugraph_ex、Static 与 Super。可用的主路径是 <code>FULL</code> 或 <code>FULL_DECODE_ONLY</code>。</div>
+        <div class="callout"><strong>不兼容算子会被跳过。</strong> 当前源码把 <code>TransposeQuantBatchMatMul</code> 放进静态编译黑名单（注释标为 dsv4 950）。它是边界示例，不代表所有 V4.1 路径都相同。</div>
+        <div class="callout teal"><strong>编译范围偏向 Decode。</strong> 当前实现从 Decode ACLGraph capture sizes 计算 SymRange。P 端若保持 eager 或可变长 Prefill，不要按 D 端 Decode 的预期验收。</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>MTP 与 MRV2 为什么会影响 shape</h3>
+      <div class="split" style="margin-top:12px">
+        <div class="callout"><strong>MRV2 的 Decode 长度更规则。</strong> 投机 token 数与主 token 一起形成统一的 query length；这让固定 shape 图更容易复用，也让 capture size 的计算更有规律。</div>
+        <div class="callout teal"><strong>MTP5 不是一个“加 5 个任意 shape”。</strong> 例如配置 56，在 query length 6 下可能归一化到 60。页面演示的就是这种取整关系，而不是承诺部署一定使用 56 或 60。</div>
+      </div>
+    </div>
+  `;
+}
+
+const superPresets = [
+  {
+    name: "Decode 外围链",
+    note: "用教学抽象展示 mHC、Norm、投影、QLI、稀疏 attention 之间的连续片段。带“候选边界”标签的节点按不可融合处理，真实支持矩阵必须由 Profiling 确认。",
+    ops: [
+      {name:"mHC pre", note:"custom op"},
+      {name:"RMSNorm", note:"normalize"},
+      {name:"Cast", note:"dtype"},
+      {name:"QKV proj", note:"matmul"},
+      {name:"QLI + metadata", note:"candidate boundary"},
+      {name:"Sparse Flash MLA", note:"large fused op"},
+      {name:"O proj", note:"matmul"},
+      {name:"mHC post", note:"custom op"},
+      {name:"Router TopK", note:"dispatch"},
+      {name:"MegaMoE", note:"comm + compute"},
+      {name:"mHC post", note:"custom op"}
+    ],
+    barriers: [4, 5, 9]
+  },
+  {
+    name: "MoE 边界",
+    note: "MoE 的通信、专家计算和路由可能天然形成边界。Super 能改善它周围的 task 组织，但不能用它替代 MegaMoE 的通信计算融合。",
+    ops: [
+      {name:"RMSNorm + Cast", note:"small ops"},
+      {name:"Router score", note:"routing"},
+      {name:"TopK", note:"routing"},
+      {name:"MegaMoE", note:"candidate boundary"},
+      {name:"Shared expert", note:"expert path"},
+      {name:"Reduce / Add", note:"elementwise"},
+      {name:"mHC post", note:"custom op"}
+    ],
+    barriers: [3, 4]
+  },
+  {
+    name: "小块连续算子",
+    note: "这个预设故意保留更少边界，用来观察“连续合格片段变长”时任务单元如何减少。它不是对任何实际模型的覆盖率承诺。",
+    ops: [
+      {name:"mHC pre", note:"fused custom"},
+      {name:"Norm", note:"small op"},
+      {name:"Cast", note:"small op"},
+      {name:"Reshape", note:"layout"},
+      {name:"Projection", note:"matmul"},
+      {name:"Elementwise", note:"small op"},
+      {name:"mHC post", note:"fused custom"},
+      {name:"Norm + Cast", note:"small ops"},
+      {name:"MoE", note:"candidate boundary"}
+    ],
+    barriers: [8]
+  }
+];
+
+function fusionGroups(preset, barriers) {
+  const groups = [];
+  let current = [];
+  for (let i = 0; i < preset.ops.length; i += 1) {
+    const op = preset.ops[i];
+    if (barriers.has(i)) {
+      if (current.length) groups.push({ops: current, boundary: false});
+      current = [];
+      groups.push({ops: [{...op, index: i}], boundary: true});
+    } else {
+      current.push({...op, index: i});
+    }
+  }
+  if (current.length) groups.push({ops: current, boundary: false});
+  return groups;
+}
+
+function updateSuperDemo() {
+  const container = $("#superGroups");
+  if (!container) return;
+  const preset = superPresets[state.super.preset];
+  const groups = fusionGroups(preset, state.super.barriers);
+  $("#superPresetNote").textContent = preset.note;
+  $("#superOps").innerHTML = preset.ops.map((op, index) => `
+    <button type="button" class="op-node ${state.super.barriers.has(index) ? "boundary cut" : ""}" data-op-index="${index}" aria-pressed="${state.super.barriers.has(index)}">
+      <b>${esc(op.name)}</b><small>${esc(op.note)}</small>
+    </button>
+  `).join("");
+  $("#superGroups").innerHTML = groups.map((group, index) => `
+    <div class="fusion-group ${group.boundary ? "boundary" : ""}">
+      <b>${group.boundary ? "边界任务" : `融合候选组 ${index + 1}`}</b>
+      <span>${group.ops.map(op => esc(op.name)).join(" + ")}</span>
+      <span>${group.ops.length > 1 ? `${group.ops.length} 个教学节点 → 1 个任务单元` : "单独保留"}</span>
+    </div>
+  `).join("");
+  $("#superOpsCount").textContent = String(preset.ops.length);
+  $("#superGroupCount").textContent = String(groups.length);
+  $("#superBoundaryCount").textContent = String(state.super.barriers.size);
+  $("#superSpanCount").textContent = String(groups.filter(group => group.ops.length > 1).length);
+  $$("#superOps [data-op-index]").forEach(button => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.opIndex);
+      if (state.super.barriers.has(index)) state.super.barriers.delete(index);
+      else state.super.barriers.add(index);
+      updateSuperDemo();
+    });
+  });
+}
+
+function superPage() {
+  return `
+    ${pageHead(
+      "Super Kernel：在静态二进制之上，减少内核任务的“碎片”",
+      "当一段连续子图的依赖关系、shape 与算子支持都合适时，Super Kernel 可以把多个 child kernel 组织成更大的执行单元，并按依赖插入同步。它不改变模型公式，改的是设备任务如何被发起和衔接。",
+      "依赖 Static + Npugraph_ex",
+      "teal"
+    )}
+
+    <div class="callout amber"><strong>先排除一个误解：</strong>Super Kernel 不是“把整个模型打成一个 kernel”。V4.1-Flash 中的 attention、MoE、collective、自定义融合算子与 metadata 依赖都会形成边界；真实收益取决于这些边界之间的可融合片段有多长。</div>
+
+    <div class="demo">
+      <div class="demo-head">
+        <div><h3>交互：点算子，切换融合边界</h3><p class="micro">灰色是教学节点；“橙色边界”表示该节点访问地址、依赖或硬件支持不满足组合条件，因而把前后片段切开。这里的数字是任务单元数，不是实测延迟。</p></div>
+        <span class="badge amber">fusion splitter</span>
+      </div>
+      <div class="demo-body">
+        <div class="demo-controls">
+          <label class="control"><span>教学序列</span><select id="superPreset">
+            ${superPresets.map((preset, index) => `<option value="${index}">${esc(preset.name)}</option>`).join("")}
+          </select></label>
+          <button type="button" id="superReset">恢复该序列的候选边界</button>
+        </div>
+        <p class="micro" id="superPresetNote" style="margin-top:10px"></p>
+        <div class="metric-row">
+          <div class="metric"><small>教学节点</small><strong id="superOpsCount">11</strong></div>
+          <div class="metric"><small>任务单元</small><strong id="superGroupCount">5</strong></div>
+          <div class="metric"><small>候选边界</small><strong id="superBoundaryCount">3</strong></div>
+          <div class="metric"><small>多节点候选组</small><strong id="superSpanCount">2</strong></div>
+        </div>
+        <div class="mini-title">原始顺序 · 点按切换边界</div>
+        <div id="superOps" class="op-flow"></div>
+        <div class="legend"><span><i></i>连续候选项</span><span><i class="amber"></i>必须切开的边界</span><span>每组表示一次示范性的任务组织结果</span></div>
+        <div class="section" style="margin-top:20px;padding-top:18px"><div class="mini-title">组合后的任务视图</div><div id="superGroups" class="group-row"></div></div>
+      </div>
+    </div>
+
+    <div class="section split">
+      <div>
+        <h3>收益可能从四个地方来</h3>
+        <div class="table-wrap" style="margin-top:12px">
+          <table>
+            <thead><tr><th>开销</th><th>Super 能做什么</th><th>什么时候更值得看</th></tr></thead>
+            <tbody>
+              <tr><td>Kernel launch</td><td>减少独立任务发起次数</td><td>Decode 小 batch、层数多、每层小块算子多</td></tr>
+              <tr><td>Task scheduling</td><td>让更大任务单元进入设备调度</td><td>稳态 decode、固定图、重复执行长</td></tr>
+              <tr><td>同步与头开销</td><td>按真实依赖组织同步，减少不必要的逐算子衔接</td><td>碎片化任务之间的空闲间隙可观测时</td></tr>
+              <tr><td>Operator-head</td><td>组合子 kernel 后共享部分执行组织成本</td><td>连续合格片段较长、边界较少</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3>为什么不能承诺“整图少一半时间”</h3>
+        <div class="callout"><strong>大算子仍然是大算子。</strong> 矩阵乘、Sparse Flash MLA、MegaMoE 的主体时间来自计算、访存或通信，任务组织只是外围成本。</div>
+        <div class="callout amber"><strong>边界越多，片段越短。</strong> 自定义算子、collective、动态 metadata 和地址依赖都可能切断融合；覆盖面是模型与版本共同决定的。</div>
+        <div class="callout teal"><strong>同步不是删除。</strong> Super 会按图依赖插入适当同步，选项里还有 <code>dcci_after_kernel_end</code> 的 cache consistency 处理。正确性优先于单纯减少 barrier。</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>放到 V4.1-Flash 的一个主干 Layer 里</h3>
+      <p class="micro" style="margin-top:6px">这份材料按 CED 的 20 个 Causal Encoder 层与 20 个 Decoder 层来阅读；具体角色、KV source 与压缩配置仍以权重 config 为准。</p>
+      <div class="module-strip" style="margin-top:14px">
+        <div class="module-block"><b>mHC pre</b><span>hc_pre / npu_hc_pre_v3<br>自定义大融合算子，外围仍可能有小任务</span><em class="level mid">外围收益</em></div>
+        <div class="module-block"><b>Attention</b><span>QLI、稀疏 Flash MLA、投影<br>本体计算重，周边是重点</span><em class="level low">本体有限</em></div>
+        <div class="module-block"><b>mHC post</b><span>npu_hc_post 与残差组合<br>适合观察固定 shape 下的片段</span><em class="level mid">中等候选</em></div>
+        <div class="module-block"><b>Norm + cast</b><span>rms_norm_cast 等小算子<br>shape 稳定时更容易进入优化</span><em class="level high">结构上优先</em></div>
+        <div class="module-block"><b>MoE / MegaMoE</b><span>路由、dispatch、专家计算、combine<br>通信计算主导，不等价于 Super</span><em class="level low">另算一类</em></div>
+      </div>
+      <p class="micro" style="margin-top:10px">等级是“结构性优化空间”的阅读提示，不是 A3 实测延迟结论。最终要看 Profiling 中实际形成了多少 Super Kernel、每个任务覆盖什么、前后 kernel 时间如何变化。</p>
+    </div>
+  `;
+}
+
+const layerModules = [
+  {name:"mHC pre", level:"mid", text:"自定义融合入口；收益更多在它前后的 shape 固定与小任务衔接。"},
+  {name:"Attention 外围", level:"mid", text:"QLI、投影与稀疏 Flash MLA 本体较大；Static/Super 主要看 metadata 前后是否可覆盖。"},
+  {name:"mHC post", level:"mid", text:"残差、组合和 dtype/layout 处理可能形成固定片段。"},
+  {name:"Norm + cast", level:"high", text:"固定 shape 下属于较容易观察的候选区，但仍受 dtype、layout 与邻接算子支持影响。"},
+  {name:"MoE / MegaMoE", level:"low", text:"通信与专家计算主导；Super 不替代 MegaMoE，只可能改善外围任务组织。"}
+];
+
+function layerDetail(index) {
+  return `
+    <div class="layer-detail">
+      <div class="demo-head" style="padding:0 0 12px;border-bottom:0">
+        <div><h3>Layer ${index} · 结构视图</h3><p class="micro">重复结构意味着同一类 launch 与同步开销可能在 40 层中反复出现；这不代表每层实测耗时相同。</p></div>
+        <span class="badge teal">Decode layer ${index}</span>
+      </div>
+      <div class="module-strip">
+        ${layerModules.map(module => `<div class="module-block"><b>${module.name}</b><span>${module.text}</span><em class="level ${module.level}">${module.level === "high" ? "优先观察" : module.level === "mid" ? "中等奖候选" : "本体受限"}</em></div>`).join("")}
+      </div>
+      <div class="callout" style="margin-top:14px"><strong>阅读顺序：</strong>先看这一层是否有足够长的连续合格片段，再看片段中是否包含大算子或 collective，最后比较关闭/开启 Super 的 kernel 任务数量、空闲间隙与 TPOT。不要只凭层数推算收益。</div>
+    </div>
+  `;
+}
+
+function updateLayerUI() {
+  const cells = $$("[data-layer]");
+  if (!cells.length) return;
+  const current = state.layers.index;
+  cells.forEach(cell => {
+    const index = Number(cell.dataset.layer);
+    cell.classList.toggle("active", !state.layers.playing && index === current);
+    cell.classList.toggle("scanned", index < current || (state.layers.playing && index < current));
+    cell.classList.toggle("current", state.layers.playing && index === current);
+  });
+  $("#layerDetailHost").innerHTML = layerDetail(current);
+  $("#layerPlayState").textContent = state.layers.playing ? `播放中 · Layer ${current} / 39` : `已定位 · Layer ${current} / 39`;
+  const play = $("#playLayers");
+  if (play) play.textContent = state.layers.playing ? "暂停逐层播放" : "播放 D 节点 Decode";
+}
+
+function startLayerPlayback() {
+  if (state.layers.playing) {
+    stopLayerPlayback();
+    updateLayerUI();
+    return;
+  }
+  stopLayerPlayback();
+  state.layers.playing = true;
+  state.layers.index = 0;
+  updateLayerUI();
+  state.layers.timer = setInterval(() => {
+    if (state.layers.index >= 39) {
+      stopLayerPlayback();
+      updateLayerUI();
+      return;
+    }
+    state.layers.index += 1;
+    updateLayerUI();
+  }, 180);
+}
+
+function benefitPage() {
+  return `
+    ${pageHead(
+      "V4.1-Flash 收益地图：先找“重复 + 固定 + 碎片化”",
+      "最值得观察的不是模型里最大的算子，而是 40 层持续重复、shape 稳定、又夹在大算子之间的小任务。下图把 Decode 的重复层、P/D 覆盖、PCP、MegaMoE 与 DSpark 放在一起看。",
+      "结构性判断 · 非实测热力图",
+      "amber"
+    )}
+
+    <div class="split wide-left">
+      <div>
+        <h3>40 层重复结构播放器</h3>
+        <p class="section-lead">点击任一层定位结构；播放只高亮观察位置，不代表该层真实耗时。每层仍包含完整的注意力与 MoE 路径。</p>
+        <div class="layer-toolbar" style="margin-top:14px">
+          <button type="button" id="playLayers">播放 D 节点 Decode</button>
+          <button type="button" id="stepLayer">下一层</button>
+          <button type="button" id="resetLayers">回到 Layer 4</button>
+          <span class="badge teal" id="layerPlayState" aria-live="polite">已定位 · Layer 4 / 39</span>
+        </div>
+        <div class="layer-map" aria-label="40 层重复结构">
+          ${Array.from({length:40}, (_, index) => `<button type="button" class="layer-cell" data-layer="${index}" aria-label="定位到 Layer ${index}"><b>L${String(index).padStart(2,"0")}</b><i></i></button>`).join("")}
+        </div>
+      </div>
+      <div>
+        <h3>用一句话判断候选</h3>
+        <div class="callout teal"><strong>固定：</strong> shape 与地址稳定，才能进入静态图与固定的 kernel 组织。</div>
+        <div class="callout"><strong>重复：</strong> 同样的任务组织在 40 层重复，单次小收益才有机会累积。</div>
+        <div class="callout amber"><strong>碎片：</strong> 连续小任务多、边界少、launch/同步空隙可观测，才更可能出现正收益。</div>
+        <div class="callout"><strong>不被计算遮住：</strong> 若大矩阵乘或 collective 占绝对主导，外围优化会被淹没。</div>
+      </div>
+    </div>
+    <div id="layerDetailHost">${layerDetail(4)}</div>
+
+    <div class="section">
+      <h3>模块收益地图：从最可能到最有限</h3>
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead><tr><th>模块</th><th>为什么可能受益</th><th>限制与边界</th><th>建议观察</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Norm / Cast / 小 elementwise</strong></td><td>shape 稳定、任务碎、每层重复；是 Static 固定入口与 Super 连续融合的典型候选。<p>V4.1 的 <code>rms_norm_cast</code> 又把 norm 与路由所需的 FP32 输入组织在一起。</p></td><td>邻接算子若不可融合，片段会缩短；单独大算子本体不因 Super 变小。</td><td>op_statistic 中 static_kernel 覆盖、kernel 计数、空闲间隙</td></tr>
+            <tr><td><strong>mHC pre / post</strong></td><td>每层重复出现，且位于 Attention 与 MoE 之间，天然有外围任务组织空间。<p><code>npu_hc_pre_v3</code>、<code>npu_hc_post</code> 已是大融合自定义算子。</p></td><td>自定义算子本体与动态参数可能形成边界；Super 不能假设能拆开或重组它。</td><td>自定义算子前后是否仍有可覆盖的小片段</td></tr>
+            <tr><td><strong>QLI / Sparse Flash MLA</strong></td><td>周围有 quantization、metadata、index 准备与输出的衔接；固定 Decode 路径可能减少外围任务。</td><td>attention 本体与候选选择是主要时间；QLI metadata 与 wait 条件可能切断融合。</td><td>kernel_details 中本体前后的 launch 与 gap</td></tr>
+            <tr><td><strong>MoE / MegaMoE</strong></td><td>MoE 是每层主路径，Super 可能改善路由、prepare/finalize 与专家计算之间暴露的任务组织。</td><td>MegaMoE 是通信计算级融合，和 Super 不是同一层优化；通信带宽、专家负载与 collective 可能主导。</td><td>通信等待、dispatch/combine、Super 覆盖是否进入 expert body</td></tr>
+            <tr><td><strong>DSpark</strong></td><td>投机 decode 若与主模型一起进入完整图，固定 query length 与重复的 draft/verify 路径可复用静态 shape。</td><td>草稿模型、accept 分支与额外 metadata 可能扩大 shape 组合、增加启动编译与验证复杂度。</td><td>主图与 draft 图的 capture、per-step TPOT、接受率与回退</td></tr>
+            <tr><td><strong>PCP</strong></td><td>Decode 的上下文并行路径若使用 <code>FULL_DECODE_ONLY</code>，仍可能进入可优化图。</td><td>PCP 不支持 <code>FULL</code>；<code>PIECEWISE</code> 与 <code>FULL_AND_PIECEWISE</code> 在当前平台路径会强制关闭 Static/Super。通信与分片约束可能压低收益。</td><td>明确 graph mode、实际 capture、跨 rank 通信与稳定性</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>P / D 两端的覆盖路径</h3>
+      <div class="coverage-grid" style="margin-top:14px">
+        <div class="coverage">
+          <div class="eyebrow">Prefill / P</div>
+          <h3>通常不是主收益面</h3>
+          <p>若 P 仍使用 <code>--enforce-eager</code>，没有 ACLGraph capture/replay，Static/Super 的主路径不生效。即使去掉 eager，P 的可变长 Prefill、KV 写入与传输也会让固定 shape 覆盖更难。</p>
+          <p><span class="badge amber">先确认是否入图</span> <span class="badge">不要从 D 的收益外推 P</span></p>
+        </div>
+        <div class="coverage decode">
+          <div class="eyebrow">Decode / D</div>
+          <h3>固定 Decode 是重点观察区</h3>
+          <p>MRV2、MTP 与 <code>FULL_DECODE_ONLY</code> 让每个 decode step 的 token 形状更规则。40 层重复执行时，launch、task organization 与关键路径空隙更容易累积成可见差异。</p>
+          <p><span class="badge teal">优先测 TPOT</span> <span class="badge teal">同时看 kernel gap</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section split">
+      <div>
+        <h3>什么时候更可能有收益</h3>
+        <ul class="ruled-list">
+          <li>Decode 稳定、小到中等 batch、延迟敏感，单 step 的 task 组织开销占比更高。</li>
+          <li>40 层中连续合格片段长，边界少；Profiling 能看到实际 Super Kernel 覆盖。</li>
+          <li>模型处于长时间稳态，首次静态编译成本可以被摊薄。</li>
+          <li>D 节点明确使用 <code>FULL_DECODE_ONLY</code> 或 <code>FULL</code>，capture 与实际服务 bucket 匹配。</li>
+          <li>MegaMoE、DSpark、PCP 等功能本身稳定，能够隔离出 Static/Super 的增量影响。</li>
+        </ul>
+      </div>
+      <div>
+        <h3>什么时候不该先开</h3>
+        <ul class="ruled-list">
+          <li>P 端 eager、图模式 NONE/PIECEWISE/FULL_AND_PIECEWISE，或没有完整 Decode capture。</li>
+          <li>服务以超短生命周期为主，静态编译和缓存构建成本来不及摊薄。</li>
+          <li>通信或超大矩阵乘占主导，且 Profiling 中 launch/gap 占比很低。</li>
+          <li>shape 组合很多、MTP/DP/PCP 经常改变 bucket，导致缓存膨胀或命中率低。</li>
+          <li>当前版本有算子黑名单、自定义算子边界或稳定性问题，尚未建立对照组。</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function effectiveConfig() {
+  const graph = state.config.graph;
+  const forcedOff = graph === "NONE" || graph === "PIECEWISE" || graph === "FULL_AND_PIECEWISE";
+  const npugraph = forcedOff ? false : state.config.npugraph;
+  const staticKernel = forcedOff ? false : state.config.staticKernel;
+  let superKernel;
+  if (forcedOff) superKernel = false;
+  else if (state.config.superKernel === "inherit") superKernel = staticKernel;
+  else superKernel = state.config.superKernel === "on";
+  const errors = [];
+  const warnings = [];
+  if (forcedOff) warnings.push(`${graph} 在当前平台路径会强制关闭 npugraph_ex、Static Kernel 与 Super Kernel。`);
+  if (staticKernel && !npugraph) errors.push("Static Kernel 依赖 npugraph_ex，不能只开 Static。");
+  if (superKernel && !staticKernel) errors.push("Super Kernel 依赖 Static Kernel，不能只开 Super。");
+  if (graph === "FULL" && state.config.superKernel === "inherit" && staticKernel) {
+    warnings.push("省略 enable_super_kernel 时，Super 自动继承 Static；这里会得到 effective=true。");
+  }
+  return {graph, forcedOff, npugraph, staticKernel, superKernel, errors, warnings};
+}
+
+function updateConfigUI() {
+  const result = effectiveConfig();
+  const status = $("#configStatus");
+  if (!status) return;
+  const statusIsError = result.errors.length > 0;
+  status.className = `status-box ${statusIsError ? "error" : result.forcedOff ? "warn" : ""}`;
+  if (statusIsError) {
+    status.innerHTML = `<strong>配置不成立：</strong>${result.errors.join(" ")}<br><span class="micro">修正依赖后再启动；不要把断言失败当成“功能已开启但仍回落”。</span>`;
+  } else if (result.forcedOff) {
+    status.innerHTML = `<strong>${result.graph} 会强制关闭优化链。</strong>即使 additional config 里写了 true，平台设置也会把它们写回 false。`;
+  } else if (result.staticKernel && result.superKernel) {
+    status.innerHTML = `<strong>有效组合：Static + Super。</strong>前提是实际执行路径进入整图 capture，且模型算子有足够覆盖。`;
+  } else if (result.staticKernel) {
+    status.innerHTML = `<strong>有效组合：只开 Static。</strong>Super 被显式关闭；这适合先隔离“固定 shape 单算子二进制”的收益。`;
+  } else if (!result.npugraph) {
+    status.innerHTML = `<strong>npugraph_ex 关闭。</strong>当前没有 Static/Super 优化链；图模式本身可能仍工作，但不能把本页两项收益算进去。`;
+  } else {
+    status.innerHTML = `<strong>基线：使用图路径，但 Static/Super 都关闭。</strong>这是最清晰的性能对照组。`;
+  }
+  const payload = {
+    ascend_compilation_config: {
+      enable_npugraph_ex: result.npugraph,
+      enable_static_kernel: result.staticKernel,
+      enable_super_kernel: result.superKernel
+    }
+  };
+  const json = JSON.stringify(payload, null, 2);
+  $("#configJson").textContent = json;
+  const oneLine = JSON.stringify(payload);
+  $("#configCommand").textContent = `vllm serve <model> \\\n  --additional-config '${oneLine}'`;
+}
+
+const verificationChecks = [
+  "固定基线：版本、镜像、权重、TP/DP/PCP、MTP、DSpark、MegaMoE 与输入集完全一致，只改变 Static/Super 变量。",
+  "确认实际 graph mode 是 FULL 或 FULL_DECODE_ONLY；P 端若保留 --enforce-eager，单独记录“不适用”。",
+  "启动日志出现 Static 编译触发或缓存复用证据；Super 路径出现 “Super kernel optimization is enabled for ACL graph capture.”。",
+  "Profiling 的 op_statistic.csv 中存在 static_kernel 条目；不是只看配置 JSON 或启动成功。",
+  "kernel_details.csv 中能看到更大的任务单元、变化后的 Block Dim 与减少的独立 launch；同时检查关键路径 gap。",
+  "在相同并发和输出长度下记录 TTFT、TPOT、吞吐、p95/p99、启动时间、峰值内存与 graph/cache 数量。",
+  "长稳、多请求、MTP 边界 shape、P/D KV 传输、DSpark 接受/回退与 MegaMoE 通信均无精度或稳定性回退。",
+  "保留一键回退配置：无法用 Profiling 证明覆盖，或净收益为负时，恢复 Static/Super 关闭并复用原缓存。"
+];
+
+function updateChecklistUI() {
+  const container = $("#checklist");
+  if (!container) return;
+  $$("[data-check]", container).forEach(box => {
+    const index = Number(box.dataset.check);
+    box.checked = state.checks.has(index);
+    box.closest(".check").classList.toggle("done", box.checked);
+  });
+  $("#checkCount").textContent = `${state.checks.size} / ${verificationChecks.length}`;
+  $("#checkProgress").style.width = `${state.checks.size / verificationChecks.length * 100}%`;
+}
+
+function configPage() {
+  return `
+    ${pageHead(
+      "配置与验证：先让依赖成立，再证明收益真的发生",
+      "Static 与 Super 不是并列的两个独立开关。Super 依赖 Static，Static 依赖 npugraph_ex；而 NONE/PIECEWISE/FULL_AND_PIECEWISE 图模式会让整条链关闭。下面的组合器按当前源码规则做本地预判。",
+      "默认：npugraph=true · static=false",
+      "teal"
+    )}
+
+    <div class="config-grid">
+      <div class="config-controls">
+        <div class="config-control"><label for="cfgGraph">cudagraph_mode</label><select id="cfgGraph">
+          <option value="NONE">NONE</option>
+          <option value="PIECEWISE">PIECEWISE</option>
+          <option value="FULL_AND_PIECEWISE">FULL_AND_PIECEWISE</option>
+          <option value="FULL_DECODE_ONLY" selected>FULL_DECODE_ONLY</option>
+          <option value="FULL">FULL</option>
+        </select></div>
+        <div class="config-control"><label for="cfgNpugraph">enable_npugraph_ex</label><select id="cfgNpugraph">
+          <option value="true" selected>true</option><option value="false">false</option>
+        </select></div>
+        <div class="config-control"><label for="cfgStatic">enable_static_kernel</label><select id="cfgStatic">
+          <option value="false" selected>false · 仓库默认</option><option value="true">true</option>
+        </select></div>
+        <div class="config-control"><label for="cfgSuper">enable_super_kernel</label><select id="cfgSuper">
+          <option value="inherit" selected>省略 · 继承 Static</option><option value="on">true</option><option value="off">false</option>
+        </select></div>
+        <div class="preset-row">
+          <button type="button" data-preset="baseline">基线</button>
+          <button type="button" data-preset="static">只开 Static</button>
+          <button type="button" data-preset="super">Static + Super</button>
+          <button type="button" data-preset="eager">Eager / 不适用</button>
+        </div>
+        <div id="configStatus" class="status-box" role="alert" aria-live="polite"></div>
+        <div class="callout amber"><strong>PCP 的图模式限制：</strong>当前文档说明 PCP 不支持 <code>FULL</code>；可用 eager、<code>PIECEWISE</code>、<code>FULL_AND_PIECEWISE</code> 或 <code>FULL_DECODE_ONLY</code>。若要观察 Static/Super，只有 <code>FULL_DECODE_ONLY</code> 能保留这条优化链；<code>PIECEWISE</code> 与 <code>FULL_AND_PIECEWISE</code> 都会被平台强制关闭。</div>
+      </div>
+      <div class="config-output">
+        <div class="demo-head" style="padding:0 0 12px;border-bottom:0"><div><h3>有效 additional_config</h3><p class="micro">输出的是按当前规则归一化后的 effective 值。</p></div><button type="button" id="copyConfig">复制 JSON</button></div>
+        <pre id="configJson"></pre>
+        <div class="mini-title" style="margin-top:16px">Linux 启动参数片段</div>
+        <pre id="configCommand"></pre>
+        <p class="micro" style="margin-top:9px">把 JSON 合并进现有 <code>--additional-config</code>，不要为同一进程重复传第二份配置。实际模型路径、并行度和其它功能参数维持原部署。</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>如何证明 Static / Super 真的生效</h3>
+      <div class="split" style="margin-top:14px">
+        <div>
+          <div class="mini-title">启动与日志证据</div>
+          <pre>Starting static kernel compilation, the build directory is &lt;path&gt;
+enable_static_kernel is enabled, static shape kernel will be used to accelerate aclgraph execution.
+Super kernel optimization is enabled for ACL graph capture.</pre>
+          <p class="micro" style="margin-top:8px">这些日志证明编译/优化步骤被触发。若静态缓存直接复用，编译起始日志可能不出现，不能仅凭缺日志判定未生效。</p>
+        </div>
+        <div>
+          <div class="mini-title">Profiling 证据</div>
+          <ul class="ruled-list">
+            <li><code>op_statistic.csv</code>：查找 op_type 或 name 含 <code>static_kernel</code> 的条目。</li>
+            <li><code>kernel_details.csv</code>：比较任务数量、kernel 时长、launch 之间的 gap 与 Block Dim。</li>
+            <li>同一输入、并发、MTP、P/D 配置下，与关闭组做 A/B；不要跨负载读数。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section split narrow-left">
+      <div>
+        <h3>验收清单</h3>
+        <p class="micro">复选框只用于本页阅读标记，刷新即清空。</p>
+        <div class="mini-title" style="margin-top:14px"><span id="checkCount">0 / 8</span></div>
+        <div class="progress" role="progressbar" aria-label="验收清单进度" aria-valuemin="0" aria-valuemax="8"><i id="checkProgress" style="width:0"></i></div>
+      </div>
+      <div class="checklist" id="checklist">
+        ${verificationChecks.map((text, index) => `<label class="check"><input type="checkbox" data-check="${index}"><span>${text}</span></label>`).join("")}
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>该记录哪些数据</h3>
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead><tr><th>维度</th><th>指标</th><th>为什么重要</th></tr></thead>
+          <tbody>
+            <tr><td>启动</td><td>从进程启动到 ready 的时间；编译目录与缓存大小</td><td>Static 可能增加数分钟到数十分钟首次开销，长稳服务才能摊薄。</td></tr>
+            <tr><td>Decode</td><td>TPOT、输出吞吐、p95/p99、每 step 的 host gap</td><td>这是 40 层重复任务组织最可能映射到业务指标的位置。</td></tr>
+            <tr><td>Prefill</td><td>TTFT、输入吞吐、是否实际入图</td><td>P eager 或可变长路径可能没有主收益，不能与 D 混算。</td></tr>
+            <tr><td>设备</td><td>kernel 数、Super Kernel 覆盖、launch gap、NPU 利用率、通信等待</td><td>区分“计算变快”和“任务组织变少”；二者机制不同。</td></tr>
+            <tr><td>稳定性</td><td>精度、MTP shape、DSpark 接受率、PCP 通信、MegaMoE 长稳</td><td>编译、地址与 cache consistency 问题往往在组合路径出现。</td></tr>
+            <tr><td>成本</td><td>峰值内存、graph/cache 数量、回退时间、维护复杂度</td><td>开启不是零成本；shape 组合越多，缓存与验证面越大。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>源码锚点</h3>
+      <div class="source-row"><strong>开关默认与依赖</strong><code>vllm_ascend/ascend_config.py:112,129,165</code><span>Default / assert</span></div>
+      <div class="source-row"><strong>Static shape 范围</strong><code>vllm_ascend/compilation/compiler_interface.py:73,121,156</code><span>MRV2 / blacklist</span></div>
+      <div class="source-row"><strong>Super 捕获路径</strong><code>vllm_ascend/compilation/acl_graph.py:212,246</code><span>scope / optimize</span></div>
+      <div class="source-row"><strong>图模式强制关闭</strong><code>vllm_ascend/platform.py:1427</code><span>NONE / piecewise paths</span></div>
+      <div class="source-row"><strong>文档定义与验证</strong><code>docs/source/user_guide/feature_guide/graph_mode.md:134,180,228,240</code><span>public guide</span></div>
+      <div class="source-row"><strong>V4.1 Decoder 层</strong><code>vllm_ascend/models/deepseek_v41/model.py:772,863,876</code><span>hc_pre / hc_post</span></div>
+      <div class="source-row"><strong>QLI 与稀疏 attention</strong><code>vllm_ascend/models/deepseek_v41/indexer.py:285<br>vllm_ascend/models/deepseek_v41/mixed_quant_attention.py:285</code><span>large ops</span></div>
+      <div class="source-row"><strong>MegaMoE 边界</strong><code>vllm_ascend/ops/fused_moe/moe_comm_method.py:289</code><span>not Super</span></div>
+    </div>
+
+    <div class="section">
+      <h3>建议的第一次 A/B</h3>
+      <div class="flowline">
+        <div class="flowstep"><b>01 固定 D 基线</b><span>MRV2、MTP、DSpark、PCP、MegaMoE 全部保持用户已验证组合，Static/Super 关闭。</span></div>
+        <div class="flowarrow">→</div>
+        <div class="flowstep"><b>02 只开 Static</b><span>先隔离固定 shape 专用二进制。记录启动成本、Profiling 覆盖、TPOT 与稳定性。</span></div>
+        <div class="flowarrow">→</div>
+        <div class="flowstep"><b>03 再加 Super</b><span>在 Static 稳定后打开 Super，比较任务组织、gap 与业务指标。</span></div>
+        <div class="flowarrow">→</div>
+        <div class="flowstep"><b>04 决定是否保留</b><span>只有净收益、覆盖证据和长稳都成立才保留；否则回到基线并保留回退配置。</span></div>
+      </div>
+    </div>
+  `;
+}
+
+const pageRenderers = {
+  overview: overviewPage,
+  static: staticPage,
+  super: superPage,
+  benefit: benefitPage,
+  config: configPage
+};
+
+function bindOverview() {}
+
+function bindStaticPage() {
+  $("#staticMtp").value = String(state.static.mtp);
+  $("#staticCapture").value = String(state.static.capture);
+  $("#staticActual").value = String(state.static.actual);
+  $("#staticActualValue").textContent = String(state.static.actual);
+  $("#staticMtp").addEventListener("change", event => {
+    state.static.mtp = Number(event.target.value);
+    updateStaticDemo();
+  });
+  $("#staticCapture").addEventListener("change", event => {
+    state.static.capture = Number(event.target.value);
+    updateStaticDemo();
+  });
+  $("#staticActual").addEventListener("input", event => {
+    state.static.actual = Number(event.target.value);
+    $("#staticActualValue").textContent = String(state.static.actual);
+    updateStaticDemo();
+  });
+  updateStaticDemo();
+}
+
+function bindSuperPage() {
+  $("#superPreset").value = String(state.super.preset);
+  $("#superPreset").addEventListener("change", event => {
+    state.super.preset = Number(event.target.value);
+    state.super.barriers = new Set(superPresets[state.super.preset].barriers);
+    updateSuperDemo();
+  });
+  $("#superReset").addEventListener("click", () => {
+    state.super.barriers = new Set(superPresets[state.super.preset].barriers);
+    updateSuperDemo();
+  });
+  updateSuperDemo();
+}
+
+function bindBenefitPage() {
+  $$("[data-layer]").forEach(cell => {
+    cell.addEventListener("click", () => {
+      stopLayerPlayback();
+      state.layers.index = Number(cell.dataset.layer);
+      updateLayerUI();
+    });
+  });
+  $("#playLayers").addEventListener("click", startLayerPlayback);
+  $("#stepLayer").addEventListener("click", () => {
+    stopLayerPlayback();
+    state.layers.index = Math.min(39, state.layers.index + 1);
+    updateLayerUI();
+  });
+  $("#resetLayers").addEventListener("click", () => {
+    stopLayerPlayback();
+    state.layers.index = 4;
+    updateLayerUI();
+  });
+  updateLayerUI();
+}
+
+function applyConfigPreset(name) {
+  if (name === "baseline") {
+    state.config = { graph: "FULL_DECODE_ONLY", npugraph: true, staticKernel: false, superKernel: "inherit" };
+  } else if (name === "static") {
+    state.config = { graph: "FULL_DECODE_ONLY", npugraph: true, staticKernel: true, superKernel: "off" };
+  } else if (name === "super") {
+    state.config = { graph: "FULL_DECODE_ONLY", npugraph: true, staticKernel: true, superKernel: "inherit" };
+  } else if (name === "eager") {
+    state.config = { graph: "NONE", npugraph: true, staticKernel: true, superKernel: "on" };
+  }
+  $("#cfgGraph").value = state.config.graph;
+  $("#cfgNpugraph").value = String(state.config.npugraph);
+  $("#cfgStatic").value = String(state.config.staticKernel);
+  $("#cfgSuper").value = state.config.superKernel;
+  updateConfigUI();
+}
+
+function bindConfigPage() {
+  $("#cfgGraph").value = state.config.graph;
+  $("#cfgNpugraph").value = String(state.config.npugraph);
+  $("#cfgStatic").value = String(state.config.staticKernel);
+  $("#cfgSuper").value = state.config.superKernel;
+  $("#cfgGraph").addEventListener("change", event => { state.config.graph = event.target.value; updateConfigUI(); });
+  $("#cfgNpugraph").addEventListener("change", event => { state.config.npugraph = event.target.value === "true"; updateConfigUI(); });
+  $("#cfgStatic").addEventListener("change", event => { state.config.staticKernel = event.target.value === "true"; updateConfigUI(); });
+  $("#cfgSuper").addEventListener("change", event => { state.config.superKernel = event.target.value; updateConfigUI(); });
+  $$("[data-preset]").forEach(button => button.addEventListener("click", () => applyConfigPreset(button.dataset.preset)));
+  $("#copyConfig").addEventListener("click", async () => {
+    try {
+      await copyText($("#configJson").textContent);
+      showToast("已复制 additional_config JSON");
+    } catch {
+      showToast("浏览器未允许复制，请手动选择 JSON");
+    }
+  });
+  $$("[data-check]").forEach(box => {
+    box.addEventListener("change", () => {
+      const index = Number(box.dataset.check);
+      if (box.checked) state.checks.add(index);
+      else state.checks.delete(index);
+      updateChecklistUI();
+    });
+  });
+  updateConfigUI();
+  updateChecklistUI();
+}
+
+function render() {
+  if (state.tab !== "benefit") stopLayerPlayback();
+  $$("[data-tab]").forEach(button => {
+    const active = button.dataset.tab === state.tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $("#main").innerHTML = pageRenderers[state.tab]();
+  if (state.tab === "overview") bindOverview();
+  if (state.tab === "static") bindStaticPage();
+  if (state.tab === "super") bindSuperPage();
+  if (state.tab === "benefit") bindBenefitPage();
+  if (state.tab === "config") bindConfigPage();
+}
+
+$$("[data-tab]").forEach(button => {
+  button.addEventListener("click", () => {
+    state.tab = button.dataset.tab;
+    render();
+    window.scrollTo({top: 0, behavior: "smooth"});
+  });
+});
+
+window.addEventListener("beforeunload", stopLayerPlayback);
+render();
+</script>
+</body>
+</html>
